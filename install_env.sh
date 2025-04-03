@@ -15,3 +15,10 @@ pip install -r requirements.txt
 # wandb
 # export WANDB_API_KEY=your_wandb_api_key
 wandb login
+
+# build bitsandbytes
+git clone https://github.com/bitsandbytes-foundation/bitsandbytes.git && cd bitsandbytes/
+cmake -DCOMPUTE_BACKEND=cuda -S .
+make
+pip install -e .   # `-e` for "editable" install, when developing BNB (otherwise leave that out)
+cd ..
