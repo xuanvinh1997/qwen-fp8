@@ -3,10 +3,10 @@
   "train_micro_batch_size_per_gpu": "auto",
   "gradient_accumulation_steps": "auto",
   "fp16": {
-    "enabled": "false"
+    "enabled": false
   },
   "bf16": {
-    "enabled": "true"
+    "enabled": true
   },
   "zero_optimization": {
     "stage": 3,
