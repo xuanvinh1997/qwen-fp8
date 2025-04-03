@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import timedelta
+import io
 import os
 import argparse
 import logging
@@ -592,10 +593,19 @@ def main():
             accelerator.wait_for_everyone()
             if accelerator.is_main_process:
                 unwrapped_model = accelerator.unwrap_model(model)
+                state_dict = accelerator.get_state_dict(model)
+                for key, value in list(state_dict.items()):
+                    if isinstance(value, io.BytesIO):
+                        # Either load the BytesIO into a proper tensor or remove it
+                        try:
+                            state_dict[key] = torch.load(value)
+                        except:
+                            del state_dict[key]
+                # Save the model
                 unwrapped_model.save_pretrained(
                     os.path.join(args.output_dir, "best_model"),
                     save_function=accelerator.save,
-                    state_dict=accelerator.get_state_dict(model),
+                    state_dict=state_dict
                 )
                 tokenizer.save_pretrained(os.path.join(args.output_dir, "best_model"))
     
@@ -603,10 +613,19 @@ def main():
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         unwrapped_model = accelerator.unwrap_model(model)
+        state_dict = accelerator.get_state_dict(model)
+        for key, value in list(state_dict.items()):
+            if isinstance(value, io.BytesIO):
+                # Either load the BytesIO into a proper tensor or remove it
+                try:
+                    state_dict[key] = torch.load(value)
+                except:
+                    del state_dict[key]
+        # Save the model
         unwrapped_model.save_pretrained(
             os.path.join(args.output_dir, "final_model"),
             save_function=accelerator.save,
-            state_dict=accelerator.get_state_dict(model),
+            state_dict=state_dict
         )
         tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
     
