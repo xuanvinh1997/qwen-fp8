@@ -368,15 +368,16 @@ def main():
         #     ds_config["zero_optimization"]["stage"] = args.zero_stage
         # kwargs["deepspeed_config"] = ds_config
         from accelerate import DeepSpeedPlugin
-        kwargs["deepspeed_plugin"] = DeepSpeedPlugin(hf_ds_config="ds_config.json")
-        # kwargs["deepspeed_plugin"] = DeepSpeedPlugin(
-        #     zero_stage=args.zero_stage,
-        #     gradient_accumulation_steps=args.gradient_accumulation_steps,
-        #     stage3_gather_16bit_weights_on_model_save=True,
-        #     gradient_clipping=1.0,
-        #     offload_optimizer_device="cpu" if args.zero_stage >= 2 else "none",
-        #     offload_param_device="cpu" if args.zero_stage >= 3 else "none",
-        # )
+        # kwargs["deepspeed_plugin"] = DeepSpeedPlugin()
+        kwargs["deepspeed_plugin"] = DeepSpeedPlugin(
+            hf_ds_config="ds_config.json"
+            # zero_stage=args.zero_stage,
+            # gradient_accumulation_steps=args.gradient_accumulation_steps,
+            # gradient_clipping=1.0,
+            # zero3_save_16bit_model=True,
+            # offload_optimizer_device="cpu" if args.zero_stage >= 2 else "none",
+            # offload_param_device="cpu" if args.zero_stage >= 3 else "none",
+        )
     
     # Initialize accelerator with all the configured options
     accelerator = Accelerator(
@@ -589,23 +590,25 @@ def main():
             
             # Save best model
             accelerator.wait_for_everyone()
-            unwrapped_model = accelerator.unwrap_model(model)
-            unwrapped_model.save_pretrained(
-                os.path.join(args.output_dir, "best_model"),
-                save_function=accelerator.save,
-                state_dict=accelerator.get_state_dict(model),
-            )
-            tokenizer.save_pretrained(os.path.join(args.output_dir, "best_model"))
+            if accelerator.is_main_process:
+                unwrapped_model = accelerator.unwrap_model(model)
+                unwrapped_model.save_pretrained(
+                    os.path.join(args.output_dir, "best_model"),
+                    save_function=accelerator.save,
+                    state_dict=accelerator.get_state_dict(model),
+                )
+                tokenizer.save_pretrained(os.path.join(args.output_dir, "best_model"))
     
     # Save final model
     accelerator.wait_for_everyone()
-    unwrapped_model = accelerator.unwrap_model(model)
-    unwrapped_model.save_pretrained(
-        os.path.join(args.output_dir, "final_model"),
-        save_function=accelerator.save,
-        state_dict=accelerator.get_state_dict(model),
-    )
-    tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
+    if accelerator.is_main_process:
+        unwrapped_model = accelerator.unwrap_model(model)
+        unwrapped_model.save_pretrained(
+            os.path.join(args.output_dir, "final_model"),
+            save_function=accelerator.save,
+            state_dict=accelerator.get_state_dict(model),
+        )
+        tokenizer.save_pretrained(os.path.join(args.output_dir, "final_model"))
     
     # End wandb run
     if args.with_tracking and accelerator.is_main_process:
