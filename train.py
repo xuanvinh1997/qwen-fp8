@@ -92,9 +92,9 @@ def parse_args():
     parser.add_argument(
         "--precision",
         type=str,
-        choices=["fp8", "fp16", "bf16"],
+        choices=["fp8", "fp16", "bf16","fp32"],
         default="fp8",
-        help="Precision for training: fp8, fp16, or bf16",
+        help="Precision for training: fp8, fp16, or bf16, fp32",
     )
     parser.add_argument(
         "--fp8_backend",
@@ -264,17 +264,30 @@ class TextDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        text = self.data[idx]["text"]
-
+        # text = self.data[idx]["text"]
+        question = self.data[idx]["question"]
+        response = self.data[idx]["response"]
+        messages = [
+            {
+                "role": "user",
+                "content": question
+            },
+            {
+                "role": "assistant",
+                "content": response
+            }
+        ]
         # Tokenize and prepare input
-        encodings = self.tokenizer(
-            text,
+        encodings = self.tokenizer.apply_chat_template(
+            messages,
             max_length=self.max_length,
             padding="max_length",
             truncation=True,
+            return_dict=True,
             return_tensors="pt",
         )
-
+        # print(encodings)
+        # Convert to tensors
         input_ids = encodings["input_ids"][0]
         attention_mask = encodings["attention_mask"][0]
 
@@ -301,8 +314,12 @@ def prepare_datasets(args, tokenizer):
             # No validation split, create one from train data
             if args.subset != -1:
                 raw_datasets["train"] = raw_datasets["train"].take(args.subset)
-
-            split = raw_datasets["train"].train_test_split(
+            # filter all question or response is empty
+            reasoning_ds = raw_datasets["train"]
+            reasoning_ds = reasoning_ds.filter(lambda x: x['question'] != "" and x['response'] != "")
+            # filter all question or response is null
+            reasoning_ds = reasoning_ds.filter(lambda x: x['question'] is not None and x['response'] is not None)
+            split = reasoning_ds.train_test_split(
                 test_size=args.validation_split_percentage / 100
             )
             raw_datasets["train"] = split["train"]
@@ -396,7 +413,7 @@ def main():
 
     # Initialize accelerator with all the configured options
     accelerator = Accelerator(
-        mixed_precision=args.precision,
+        mixed_precision='no' if args.precision == "fp32" else args.precision,
         log_with=args.report_to if args.with_tracking else None,
         **kwargs,
     )
@@ -436,7 +453,7 @@ def main():
     logger.info(f"Loading model: {args.model_name_or_path}")
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path,
-        torch_dtype=(torch.bfloat16 if args.precision == "bf16" else torch.float16),
+        # torch_dtype=(torch.bfloat16 if args.precision == "bf16" else torch.float16),
     )
     # from utils import convert_and_setup_moe_model
     # model = convert_and_setup_moe_model(
@@ -572,7 +589,7 @@ def main():
                 # Log loss and learning rate
                 total_train_loss += loss.detach().float()
 
-                if completed_steps % 100 == 0:
+                if completed_steps % 10 == 0:
                     avg_loss = total_train_loss.item() / (step + 1)
                     current_lr = lr_scheduler.get_last_lr()[0]
                     if args.with_tracking:
