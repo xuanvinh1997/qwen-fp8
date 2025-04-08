@@ -269,6 +269,10 @@ class TextDataset(Dataset):
         response = self.data[idx]["response"]
         messages = [
             {
+                "role": "system",
+                "content": "Please reason step by step, and put your final answer at the end of the response."
+            },
+            {
                 "role": "user",
                 "content": question
             },
